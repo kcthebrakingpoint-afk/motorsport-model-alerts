@@ -4,11 +4,19 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - 'seen_refs.json'
   workflow_dispatch:
+  schedule:
+    - cron: '0 * * * *'
+
+permissions:
+  contents: write
 
 jobs:
   monitor:
     runs-on: ubuntu-latest
+
     steps:
       - name: Get repository files
         uses: actions/checkout@v4
@@ -18,5 +26,18 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Run diagnostic
+      - name: Run Spark Model monitor
         run: python monitor.py
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+      - name: Save seen models
+        if: always()
+        run: |
+          if [ -n "$(git status --porcelain -- seen_refs.json)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add seen_refs.json
+            git commit -m "Update seen Spark models"
+            git push
+          fi
