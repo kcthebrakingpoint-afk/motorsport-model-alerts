@@ -11,40 +11,26 @@ def download(url):
     with urllib.request.urlopen(request, timeout=30) as response:
         return response.read().decode("utf-8", errors="ignore")
 
-html = download(BASE + "/collections?pageSize=48&state=INDEVELOPMENT")
+url = BASE + "/chunk-ClaZaUFg.js"
+js = download(url)
 
-scripts = re.findall(
-    r'<script[^>]+src=["\']([^"\']+)',
-    html,
-    re.IGNORECASE
-)
+print("Downloaded collection component:", len(js), "characters")
 
-main_script = next(s for s in scripts if "main-" in s)
-js = download(BASE + "/" + main_script.lstrip("/"))
+print("\n--- API REQUESTS ---")
 
-print("API CONFIGURATION")
-for match in re.finditer(r'apiURL', js):
-    print(js[max(0, match.start()-100):match.start()+200])
-    print("---")
+for match in re.finditer(r'apiURL|\.http\.(?:get|post)\(', js):
+    start = max(0, match.start() - 300)
+    end = min(len(js), match.end() + 500)
+    print(js[start:end])
+    print("\n---")
 
-print("\nCOLLECTION COMPONENT")
-for match in re.finditer(r'CollectionsPageComponent', js):
-    print(js[max(0, match.start()-500):match.start()+200])
-    print("---")
+print("\n--- COLLECTION AND PRODUCT REFERENCES ---")
 
-print("\nCOLLECTION CHUNK FILES")
-chunks = set(re.findall(
-    r'import\(["\']([^"\']+\.js)["\']\)\.then\([^)]*CollectionsPageComponent',
-    js
-))
-for chunk in sorted(chunks):
-    print(chunk)
+for term in ["collection", "product", "page_size", "pageSize", "INDEVELOPMENT"]:
+    print("\nSearching for:", term)
 
-print("\nPOSSIBLE API PATHS")
-paths = set(re.findall(
-    r'["\'](/[^"\']*(?:collection|product|model)[^"\']*)["\']',
-    js,
-    re.IGNORECASE
-))
-for path in sorted(paths):
-    print(path)
+    for match in list(re.finditer(term, js, re.IGNORECASE))[:5]:
+        start = max(0, match.start() - 200)
+        end = min(len(js), match.end() + 300)
+        print(js[start:end])
+        print("---")
