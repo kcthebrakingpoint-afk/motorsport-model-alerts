@@ -7,6 +7,8 @@ import urllib.error
 
 API_URL = "https://rapi.sparkmodel.com/products"
 BASE_URL = "https://www.sparkmodel.com/products/"
+IMAGE_API_BASE = "https://rapi.sparkmodel.com/products/"
+IMAGE_CDN_BASE = "https://minimax.fra1.cdn.digitaloceanspaces.com/published/"
 STATE_FILE = "seen_refs.json"
 
 BROWSER_UA = (
@@ -73,6 +75,38 @@ def get_category(product):
         return "Not specified"
 
 
+def get_product_image(product):
+    product_id = product.get("product_id")
+
+    if product_id:
+        image_api = (
+            IMAGE_API_BASE
+            + product_id
+            + "/images?sort=position"
+        )
+
+        try:
+            result = api_request(image_api)
+            images = result.get("data", [])
+
+            if images:
+                image_id = images[0]
+
+                if isinstance(image_id, dict):
+                    image_id = (
+                        image_id.get("image_id")
+                        or image_id.get("id")
+                    )
+
+                if image_id:
+                    return IMAGE_CDN_BASE + str(image_id) + ".webp"
+
+        except Exception as error:
+            print(f"Image lookup failed for {product_id}: {error}")
+
+    return product.get("primary_image_url", "")
+
+
 def save_seen(seen):
     with open(STATE_FILE, "w", encoding="utf-8") as file:
         json.dump(sorted(seen), file, indent=2)
@@ -89,13 +123,16 @@ def send_discord_alert(product):
     product_id = product.get("product_id")
     product_name = product.get("name", "New Spark model").strip()
     product_url = BASE_URL + product_id
+    image_url = get_product_image(product)
+
+    print(f"Image URL: {image_url}")
 
     embed = {
         "title": product_name[:256],
         "url": product_url,
         "color": 0x7136A8,
         "image": {
-            "url": product.get("primary_image_url", "")
+            "url": image_url
         },
         "fields": [
             {"name": "Brand", "value": "Spark Model", "inline": True},
@@ -179,3 +216,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
