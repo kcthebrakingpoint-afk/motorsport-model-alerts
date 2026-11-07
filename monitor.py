@@ -9,18 +9,14 @@ API_URL = "https://rapi.sparkmodel.com/products"
 BASE_URL = "https://www.sparkmodel.com/products/"
 STATE_FILE = "seen_refs.json"
 
-def api_request(url, payload=None):
-    data = json.dumps(payload).encode("utf-8") if payload is not None else None
 
+def api_request(url):
     request = urllib.request.Request(
         url,
-        data=data,
         headers={
             "User-Agent": "Mozilla/5.0",
-            "Content-Language": "en",
-            "Content-Type": "application/json"
-        },
-        method="POST" if data else "GET"
+            "Content-Language": "en"
+        }
     )
 
     with urllib.request.urlopen(request, timeout=40) as response:
@@ -30,29 +26,28 @@ def api_request(url, payload=None):
 def get_all_products():
     products = []
 
-    first_url = API_URL + "?" + urllib.parse.urlencode({
+    params = {
         "site": "sparkmodel-web",
         "lang": "en",
         "state": "INDEVELOPMENT",
         "page_number": "1"
-    })
+    }
 
-    first_result = api_request(first_url)
+    url = API_URL + "?" + urllib.parse.urlencode(params)
+    first_result = api_request(url)
+
     products.extend(first_result.get("data", []))
 
     total_pages = first_result.get("meta", {}).get("total_pages", 1)
     print(f"Found {total_pages} pages of models.")
 
     for page in range(2, total_pages + 1):
-        url = API_URL + "?" + urllib.parse.urlencode({
-            "site": "sparkmodel-web",
-            "lang": "en",
-            "state": "INDEVELOPMENT",
-            "page_number": str(page)
-        })
+        params["page_number"] = str(page)
+        url = API_URL + "?" + urllib.parse.urlencode(params)
 
         result = api_request(url)
         products.extend(result.get("data", []))
+
         print(f"Retrieved page {page}/{total_pages}.")
 
     return products
@@ -96,12 +91,36 @@ def send_discord_alert(product):
             "url": product.get("primary_image_url", "")
         },
         "fields": [
-            {"name": "Brand", "value": "Spark Model", "inline": True},
-            {"name": "Reference", "value": product.get("code") or "N/A", "inline": True},
-            {"name": "Scale", "value": product.get("scale_name") or "N/A", "inline": True},
-            {"name": "Year", "value": str(product.get("year") or "N/A"), "inline": True},
-            {"name": "Category", "value": get_category(product), "inline": True},
-            {"name": "Status", "value": "In Development", "inline": True}
+            {
+                "name": "Brand",
+                "value": "Spark Model",
+                "inline": True
+            },
+            {
+                "name": "Reference",
+                "value": product.get("code") or "N/A",
+                "inline": True
+            },
+            {
+                "name": "Scale",
+                "value": product.get("scale_name") or "N/A",
+                "inline": True
+            },
+            {
+                "name": "Year",
+                "value": str(product.get("year") or "N/A"),
+                "inline": True
+            },
+            {
+                "name": "Category",
+                "value": get_category(product),
+                "inline": True
+            },
+            {
+                "name": "Status",
+                "value": "In Development",
+                "inline": True
+            }
         ],
         "footer": {
             "text": "Motorsport Models • Spark Model Alerts"
@@ -117,9 +136,17 @@ def send_discord_alert(product):
         method="POST"
     )
 
-    with urllib.request.urlopen(request, timeout=30) as response:
-        if response.status not in (200, 204):
-            raise RuntimeError(f"Discord returned status {response.status}")
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            print("Discord response:", response.status)
+
+    except urllib.error.HTTPError as error:
+        print("Discord error status:", error.code)
+        print(
+            "Discord error details:",
+            error.read().decode("utf-8")
+        )
+        raise
 
 
 def main():
@@ -157,8 +184,10 @@ def main():
 
     for product in new_products:
         send_discord_alert(product)
+
         seen.add(product["product_id"])
         save_seen(seen)
+
         print(f"Announced: {product.get('code', 'Unknown reference')}")
 
     print("Monitoring check complete.")
@@ -166,4 +195,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
