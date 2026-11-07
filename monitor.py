@@ -1,8 +1,7 @@
 import urllib.request
 import re
-from urllib.parse import urljoin
 
-URL = "https://www.sparkmodel.com/collections?pageSize=48&state=INDEVELOPMENT"
+BASE = "https://www.sparkmodel.com"
 
 def download(url):
     request = urllib.request.Request(
@@ -12,7 +11,7 @@ def download(url):
     with urllib.request.urlopen(request, timeout=30) as response:
         return response.read().decode("utf-8", errors="ignore")
 
-html = download(URL)
+html = download(BASE + "/collections?pageSize=48&state=INDEVELOPMENT")
 
 scripts = re.findall(
     r'<script[^>]+src=["\']([^"\']+)',
@@ -20,31 +19,32 @@ scripts = re.findall(
     re.IGNORECASE
 )
 
-print("JavaScript files found:", len(scripts))
+main_script = next(s for s in scripts if "main-" in s)
+js = download(BASE + "/" + main_script.lstrip("/"))
 
-for script in scripts:
-    script_url = urljoin(URL, script)
-    print("\n---", script_url, "---")
+print("API CONFIGURATION")
+for match in re.finditer(r'apiURL', js):
+    print(js[max(0, match.start()-100):match.start()+200])
+    print("---")
 
-    try:
-        js = download(script_url)
+print("\nCOLLECTION COMPONENT")
+for match in re.finditer(r'CollectionsPageComponent', js):
+    print(js[max(0, match.start()-500):match.start()+200])
+    print("---")
 
-        # Find API URLs and nearby references
-        for match in re.finditer(r'api\.sparkmodel\.com', js, re.IGNORECASE):
-            start = max(0, match.start() - 250)
-            end = min(len(js), match.end() + 400)
-            print(js[start:end])
-            print("---")
+print("\nCOLLECTION CHUNK FILES")
+chunks = set(re.findall(
+    r'import\(["\']([^"\']+\.js)["\']\)\.then\([^)]*CollectionsPageComponent',
+    js
+))
+for chunk in sorted(chunks):
+    print(chunk)
 
-        # Find likely product-data endpoints
-        endpoints = set(re.findall(
-            r'["\']([^"\']{0,150}(?:product|collection|model|search)[^"\']{0,150})["\']',
-            js,
-            re.IGNORECASE
-        ))
-
-        for endpoint in list(endpoints)[:30]:
-            print("Possible endpoint:", endpoint)
-
-    except Exception as error:
-        print("Could not download:", error)
+print("\nPOSSIBLE API PATHS")
+paths = set(re.findall(
+    r'["\'](/[^"\']*(?:collection|product|model)[^"\']*)["\']',
+    js,
+    re.IGNORECASE
+))
+for path in sorted(paths):
+    print(path)
