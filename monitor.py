@@ -1,43 +1,169 @@
+
+import json
+import os
 import urllib.request
 import urllib.parse
-import json
+import urllib.error
 
-base = {
-    "site": "sparkmodel-web",
-    "lang": "en",
-    "state": "INDEVELOPMENT"
-}
+API_URL = "https://rapi.sparkmodel.com/products"
+BASE_URL = "https://www.sparkmodel.com/products/"
+STATE_FILE = "seen_refs.json"
 
-tests = [
-    {"currentPage": "2"},
-    {"current_page": "2"},
-    {"page_number": "2"},
-    {"pageNo": "2"},
-    {"page_no": "2"},
-    {"pageIndex": "2"},
-    {"per_page": "20"},
-    {"hitsPerPage": "20"}
-]
-
-for extra in tests:
-    params = {**base, **extra}
-    url = "https://rapi.sparkmodel.com/products?" + urllib.parse.urlencode(params)
+def api_request(url, payload=None):
+    data = json.dumps(payload).encode("utf-8") if payload is not None else None
 
     request = urllib.request.Request(
         url,
-        headers={"User-Agent": "Mozilla/5.0", "Content-Language": "en"}
+        data=data,
+        headers={
+            "User-Agent": "Mozilla/5.0",
+            "Content-Language": "en",
+            "Content-Type": "application/json"
+        },
+        method="POST" if data else "GET"
     )
 
+    with urllib.request.urlopen(request, timeout=40) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def get_all_products():
+    products = []
+
+    first_url = API_URL + "?" + urllib.parse.urlencode({
+        "site": "sparkmodel-web",
+        "lang": "en",
+        "state": "INDEVELOPMENT",
+        "page_number": "1"
+    })
+
+    first_result = api_request(first_url)
+    products.extend(first_result.get("data", []))
+
+    total_pages = first_result.get("meta", {}).get("total_pages", 1)
+    print(f"Found {total_pages} pages of models.")
+
+    for page in range(2, total_pages + 1):
+        url = API_URL + "?" + urllib.parse.urlencode({
+            "site": "sparkmodel-web",
+            "lang": "en",
+            "state": "INDEVELOPMENT",
+            "page_number": str(page)
+        })
+
+        result = api_request(url)
+        products.extend(result.get("data", []))
+        print(f"Retrieved page {page}/{total_pages}.")
+
+    return products
+
+
+def get_category(product):
+    categories = product.get("simplified_categories", [])
+
+    if not categories:
+        return "Not specified"
+
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            result = json.loads(response.read().decode("utf-8"))
-            products = result.get("data", [])
-            meta = result.get("meta", {})
+        name = json.loads(categories[0].get("name", "{}"))
+        return name.get("en", "Not specified")
+    except (TypeError, json.JSONDecodeError):
+        return "Not specified"
 
-            print("\nTest:", extra)
-            print("Page:", meta.get("page"))
-            print("Total pages:", meta.get("total_pages"))
-            print("First reference:", products[0].get("code") if products else "None")
 
-    except Exception as error:
-        print("Error:", error)
+def save_seen(seen):
+    with open(STATE_FILE, "w", encoding="utf-8") as file:
+        json.dump(sorted(seen), file, indent=2)
+
+
+def send_discord_alert(product):
+    webhook = os.environ.get("DISCORD_WEBHOOK_URL")
+
+    if not webhook:
+        raise RuntimeError(
+            "DISCORD_WEBHOOK_URL secret is missing from GitHub."
+        )
+
+    product_id = product.get("product_id")
+    product_name = product.get("name", "New Spark model").strip()
+    product_url = BASE_URL + product_id
+
+    embed = {
+        "title": product_name[:256],
+        "url": product_url,
+        "color": 0x7136A8,
+        "image": {
+            "url": product.get("primary_image_url", "")
+        },
+        "fields": [
+            {"name": "Brand", "value": "Spark Model", "inline": True},
+            {"name": "Reference", "value": product.get("code") or "N/A", "inline": True},
+            {"name": "Scale", "value": product.get("scale_name") or "N/A", "inline": True},
+            {"name": "Year", "value": str(product.get("year") or "N/A"), "inline": True},
+            {"name": "Category", "value": get_category(product), "inline": True},
+            {"name": "Status", "value": "In Development", "inline": True}
+        ],
+        "footer": {
+            "text": "Motorsport Models • Spark Model Alerts"
+        }
+    }
+
+    payload = {"embeds": [embed]}
+
+    request = urllib.request.Request(
+        webhook,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST"
+    )
+
+    with urllib.request.urlopen(request, timeout=30) as response:
+        if response.status not in (200, 204):
+            raise RuntimeError(f"Discord returned status {response.status}")
+
+
+def main():
+    print("Checking Spark Model in-development collection...")
+
+    products = get_all_products()
+    print(f"Retrieved {len(products)} models.")
+
+    if not os.path.exists(STATE_FILE):
+        seen = {
+            product["product_id"]
+            for product in products
+            if product.get("product_id")
+        }
+
+        save_seen(seen)
+        print(f"Initial setup complete. Saved {len(seen)} existing models.")
+        print("No announcements sent during initial setup.")
+        return
+
+    with open(STATE_FILE, "r", encoding="utf-8") as file:
+        seen = set(json.load(file))
+
+    new_products = [
+        product for product in products
+        if product.get("product_id")
+        and product["product_id"] not in seen
+    ]
+
+    if not new_products:
+        print("No new models found.")
+        return
+
+    print(f"Found {len(new_products)} new models.")
+
+    for product in new_products:
+        send_discord_alert(product)
+        seen.add(product["product_id"])
+        save_seen(seen)
+        print(f"Announced: {product.get('code', 'Unknown reference')}")
+
+    print("Monitoring check complete.")
+
+
+if __name__ == "__main__":
+    main()
+    
