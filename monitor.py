@@ -1,19 +1,18 @@
 import urllib.request
 import re
+from urllib.parse import urljoin
 
 URL = "https://www.sparkmodel.com/collections?pageSize=48&state=INDEVELOPMENT"
 
-request = urllib.request.Request(
-    URL,
-    headers={"User-Agent": "Mozilla/5.0"}
-)
+def download(url):
+    request = urllib.request.Request(
+        url,
+        headers={"User-Agent": "Mozilla/5.0"}
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        return response.read().decode("utf-8", errors="ignore")
 
-with urllib.request.urlopen(request, timeout=30) as response:
-    html = response.read().decode("utf-8", errors="ignore")
-
-print("Downloaded:", len(html), "characters")
-
-print("\n--- JAVASCRIPT FILES ---")
+html = download(URL)
 
 scripts = re.findall(
     r'<script[^>]+src=["\']([^"\']+)',
@@ -21,21 +20,31 @@ scripts = re.findall(
     re.IGNORECASE
 )
 
+print("JavaScript files found:", len(scripts))
+
 for script in scripts:
-    print(script)
+    script_url = urljoin(URL, script)
+    print("\n---", script_url, "---")
 
-print("\n--- API REFERENCES ---")
+    try:
+        js = download(script_url)
 
-matches = set(re.findall(
-    r'["\']([^"\']*(?:api|graphql|product|collection)[^"\']*)["\']',
-    html,
-    re.IGNORECASE
-))
+        # Find API URLs and nearby references
+        for match in re.finditer(r'api\.sparkmodel\.com', js, re.IGNORECASE):
+            start = max(0, match.start() - 250)
+            end = min(len(js), match.end() + 400)
+            print(js[start:end])
+            print("---")
 
-for match in sorted(matches):
-    print(match[:300])
+        # Find likely product-data endpoints
+        endpoints = set(re.findall(
+            r'["\']([^"\']{0,150}(?:product|collection|model|search)[^"\']{0,150})["\']',
+            js,
+            re.IGNORECASE
+        ))
 
-print("\n--- PRODUCT DATA CHECK ---")
+        for endpoint in list(endpoints)[:30]:
+            print("Possible endpoint:", endpoint)
 
-for term in ["SJ198", "products", "INDEVELOPMENT", "graphql"]:
-    print(term, ":", term in html)
+    except Exception as error:
+        print("Could not download:", error)
