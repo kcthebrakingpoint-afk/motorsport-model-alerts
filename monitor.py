@@ -1,35 +1,49 @@
 import urllib.request
 import re
 
-URL = "https://www.sparkmodel.com/main-C42EPFXI.js"
+BASE = "https://www.sparkmodel.com"
 
-request = urllib.request.Request(
-    URL,
-    headers={"User-Agent": "Mozilla/5.0"}
-)
+def download(url):
+    request = urllib.request.Request(
+        url,
+        headers={"User-Agent": "Mozilla/5.0"}
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        return response.read().decode("utf-8", errors="ignore")
 
-with urllib.request.urlopen(request, timeout=30) as response:
-    js = response.read().decode("utf-8", errors="ignore")
+main = download(BASE + "/main-C42EPFXI.js")
 
-print("Main script downloaded:", len(js), "characters")
+chunks = set(re.findall(
+    r'import\(["\']([^"\']+\.js)["\']',
+    main
+))
 
-print("\n--- API ENDPOINTS ---")
+chunks.add("./chunk-ClaZaUFg.js")
+chunks.add("./chunk-CYmLvJit.js")
 
-paths = sorted(set(re.findall(
-    r'apiURL\s*\+\s*["\']([^"\']+)',
-    js
-)))
+print("JavaScript files to inspect:", len(chunks))
 
-for path in paths:
-    print(path)
+for chunk in sorted(chunks):
+    url = BASE + "/" + chunk.lstrip("./")
 
-print("\n--- PRODUCT-RELATED API CODE ---")
+    try:
+        js = download(url)
+    except Exception:
+        continue
 
-for term in ["products", "product_id", "productId", "productStates"]:
-    print("\nSearching:", term)
+    paths = set(re.findall(
+        r'apiURL\s*\+\s*["\']([^"\']+)',
+        js
+    ))
 
-    for match in list(re.finditer(term, js, re.IGNORECASE))[:5]:
-        start = max(0, match.start() - 250)
-        end = min(len(js), match.end() + 400)
-        print(js[start:end])
-        print("---")
+    if paths:
+        print("\nFILE:", chunk)
+        print("API PATHS:", sorted(paths))
+
+    if re.search(r'product|collection', js, re.IGNORECASE) and "apiURL" in js:
+        print("\nPRODUCT/COLLECTION CODE:", chunk)
+
+        for match in list(re.finditer(r'apiURL', js))[:5]:
+            start = max(0, match.start() - 150)
+            end = min(len(js), match.end() + 250)
+            print(js[start:end])
