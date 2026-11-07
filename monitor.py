@@ -9,13 +9,20 @@ API_URL = "https://rapi.sparkmodel.com/products"
 BASE_URL = "https://www.sparkmodel.com/products/"
 STATE_FILE = "seen_refs.json"
 
+BROWSER_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/130.0.0.0 Safari/537.36"
+)
+
 
 def api_request(url):
     request = urllib.request.Request(
         url,
         headers={
-            "User-Agent": "Mozilla/5.0",
-            "Content-Language": "en"
+            "User-Agent": BROWSER_UA,
+            "Content-Language": "en",
+            "Accept": "application/json"
         }
     )
 
@@ -91,36 +98,12 @@ def send_discord_alert(product):
             "url": product.get("primary_image_url", "")
         },
         "fields": [
-            {
-                "name": "Brand",
-                "value": "Spark Model",
-                "inline": True
-            },
-            {
-                "name": "Reference",
-                "value": product.get("code") or "N/A",
-                "inline": True
-            },
-            {
-                "name": "Scale",
-                "value": product.get("scale_name") or "N/A",
-                "inline": True
-            },
-            {
-                "name": "Year",
-                "value": str(product.get("year") or "N/A"),
-                "inline": True
-            },
-            {
-                "name": "Category",
-                "value": get_category(product),
-                "inline": True
-            },
-            {
-                "name": "Status",
-                "value": "In Development",
-                "inline": True
-            }
+            {"name": "Brand", "value": "Spark Model", "inline": True},
+            {"name": "Reference", "value": product.get("code") or "N/A", "inline": True},
+            {"name": "Scale", "value": product.get("scale_name") or "N/A", "inline": True},
+            {"name": "Year", "value": str(product.get("year") or "N/A"), "inline": True},
+            {"name": "Category", "value": get_category(product), "inline": True},
+            {"name": "Status", "value": "In Development", "inline": True}
         ],
         "footer": {
             "text": "Motorsport Models • Spark Model Alerts"
@@ -132,7 +115,11 @@ def send_discord_alert(product):
     request = urllib.request.Request(
         webhook,
         data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            "User-Agent": BROWSER_UA,
+            "Accept": "application/json"
+        },
         method="POST"
     )
 
@@ -142,10 +129,7 @@ def send_discord_alert(product):
 
     except urllib.error.HTTPError as error:
         print("Discord error status:", error.code)
-        print(
-            "Discord error details:",
-            error.read().decode("utf-8")
-        )
+        print("Discord error details:", error.read().decode("utf-8"))
         raise
 
 
