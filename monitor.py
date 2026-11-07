@@ -1,18 +1,27 @@
 import urllib.request
 import urllib.parse
+import json
 
-BASE = "https://rapi.sparkmodel.com"
+BASE = "https://rapi.sparkmodel.com/products"
+base_params = {
+    "site": "sparkmodel-web",
+    "lang": "en",
+    "state": "INDEVELOPMENT",
+    "pageSize": "48"
+}
 
 tests = [
-    {"site": "sparkmodel-web", "lang": "en", "state": "INDEVELOPMENT", "pageSize": "48"},
-    {"site": "sparkmodel-web", "lang": "en", "webcatalogue_state": "INDEVELOPMENT", "pageSize": "48"},
-    {"site": "sparkmodel-web", "lang": "en", "state": "INDEVELOPMENT", "limit": "48"},
-    {"site": "sparkmodel-web", "lang": "en", "webcatalogue_state": "INDEVELOPMENT", "limit": "48"},
+    {},
+    {"page": "2"},
+    {"pageNumber": "2"},
+    {"offset": "48"},
+    {"skip": "48"},
+    {"pageIndex": "1"}
 ]
 
-for params in tests:
-    url = BASE + "/products?" + urllib.parse.urlencode(params)
-    print("\nTesting:", url)
+for extra in tests:
+    params = {**base_params, **extra}
+    url = BASE + "?" + urllib.parse.urlencode(params)
 
     request = urllib.request.Request(
         url,
@@ -21,8 +30,16 @@ for params in tests:
 
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
-            data = response.read().decode("utf-8")
-            print("Status:", response.status)
-            print("Response:", data[:2500])
+            result = json.loads(response.read().decode("utf-8"))
+            products = result.get("data", [])
+
+            print("\nParameters:", extra or "default")
+            print("Response keys:", list(result.keys()))
+            print("Products returned:", len(products))
+
+            if products:
+                print("First:", products[0].get("code"))
+                print("Last:", products[-1].get("code"))
+
     except Exception as error:
         print("Error:", error)
