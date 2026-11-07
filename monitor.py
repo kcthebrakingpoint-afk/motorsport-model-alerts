@@ -1,49 +1,29 @@
 import urllib.request
-import re
+import json
 
-BASE = "https://www.sparkmodel.com"
+BASE = "https://rapi.sparkmodel.com"
+PRODUCT_ID = "4d0fdfda-04fd-4e6e-9951-47627a398b3a"
 
-def download(url):
+def test_api(path):
+    url = BASE + path
     request = urllib.request.Request(
         url,
-        headers={"User-Agent": "Mozilla/5.0"}
+        headers={
+            "User-Agent": "Mozilla/5.0",
+            "Content-Language": "en"
+        }
     )
-    with urllib.request.urlopen(request, timeout=30) as response:
-        return response.read().decode("utf-8", errors="ignore")
 
-main = download(BASE + "/main-C42EPFXI.js")
-
-chunks = set(re.findall(
-    r'import\(["\']([^"\']+\.js)["\']',
-    main
-))
-
-chunks.add("./chunk-ClaZaUFg.js")
-chunks.add("./chunk-CYmLvJit.js")
-
-print("JavaScript files to inspect:", len(chunks))
-
-for chunk in sorted(chunks):
-    url = BASE + "/" + chunk.lstrip("./")
+    print("\nTesting:", url)
 
     try:
-        js = download(url)
-    except Exception:
-        continue
+        with urllib.request.urlopen(request, timeout=30) as response:
+            data = response.read().decode("utf-8")
+            print("Status:", response.status)
+            print("Response:", data[:5000])
 
-    paths = set(re.findall(
-        r'apiURL\s*\+\s*["\']([^"\']+)',
-        js
-    ))
+    except Exception as error:
+        print("Error:", error)
 
-    if paths:
-        print("\nFILE:", chunk)
-        print("API PATHS:", sorted(paths))
-
-    if re.search(r'product|collection', js, re.IGNORECASE) and "apiURL" in js:
-        print("\nPRODUCT/COLLECTION CODE:", chunk)
-
-        for match in list(re.finditer(r'apiURL', js))[:5]:
-            start = max(0, match.start() - 150)
-            end = min(len(js), match.end() + 250)
-            print(js[start:end])
+test_api("/products/" + PRODUCT_ID + "?site=sparkmodel-web&lang=en")
+test_api("/products/" + PRODUCT_ID + "/images?sort=position")
