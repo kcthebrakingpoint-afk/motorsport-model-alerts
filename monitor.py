@@ -99,7 +99,11 @@ def get_product_image(product):
                     )
 
                 if image_id:
-                    return IMAGE_CDN_BASE + str(image_id) + ".webp"
+                    return (
+                        IMAGE_CDN_BASE
+                        + str(image_id)
+                        + "-mobile-2x.avif"
+                    )
 
         except Exception as error:
             print(f"Image lookup failed for {product_id}: {error}")
@@ -216,4 +220,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
