@@ -1,36 +1,35 @@
 import urllib.request
 import re
 
-BASE = "https://www.sparkmodel.com"
+URL = "https://www.sparkmodel.com/main-C42EPFXI.js"
 
-def download(url):
-    request = urllib.request.Request(
-        url,
-        headers={"User-Agent": "Mozilla/5.0"}
-    )
-    with urllib.request.urlopen(request, timeout=30) as response:
-        return response.read().decode("utf-8", errors="ignore")
+request = urllib.request.Request(
+    URL,
+    headers={"User-Agent": "Mozilla/5.0"}
+)
 
-url = BASE + "/chunk-ClaZaUFg.js"
-js = download(url)
+with urllib.request.urlopen(request, timeout=30) as response:
+    js = response.read().decode("utf-8", errors="ignore")
 
-print("Downloaded collection component:", len(js), "characters")
+print("Main script downloaded:", len(js), "characters")
 
-print("\n--- API REQUESTS ---")
+print("\n--- API ENDPOINTS ---")
 
-for match in re.finditer(r'apiURL|\.http\.(?:get|post)\(', js):
-    start = max(0, match.start() - 300)
-    end = min(len(js), match.end() + 500)
-    print(js[start:end])
-    print("\n---")
+paths = sorted(set(re.findall(
+    r'apiURL\s*\+\s*["\']([^"\']+)',
+    js
+)))
 
-print("\n--- COLLECTION AND PRODUCT REFERENCES ---")
+for path in paths:
+    print(path)
 
-for term in ["collection", "product", "page_size", "pageSize", "INDEVELOPMENT"]:
-    print("\nSearching for:", term)
+print("\n--- PRODUCT-RELATED API CODE ---")
+
+for term in ["products", "product_id", "productId", "productStates"]:
+    print("\nSearching:", term)
 
     for match in list(re.finditer(term, js, re.IGNORECASE))[:5]:
-        start = max(0, match.start() - 200)
-        end = min(len(js), match.end() + 300)
+        start = max(0, match.start() - 250)
+        end = min(len(js), match.end() + 400)
         print(js[start:end])
         print("---")
